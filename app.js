@@ -7,7 +7,8 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const FacebookStrategy = require("passport-facebook").Strategy;
 const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
@@ -33,7 +34,8 @@ mongoose.set("useCreateIndex", true);
 const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  facebookId: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -67,13 +69,24 @@ passport.use(new GoogleStrategy({
   }
 ));
 
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
 app.get("/", function(req, res){
   res.render("home");
 });
 
 app.get("/auth/google",
-  passport.authenticate("google", {scope: ["profile"] })
-);
+  passport.authenticate("google", {scope: ["profile"] }));
 
 app.get("/auth/google/secrets",
   passport.authenticate("google", {failureRedirect: "/login" }),
@@ -81,6 +94,15 @@ app.get("/auth/google/secrets",
     res.redirect("/secrets");
 });
 
+app.get('/auth/facebook',
+  passport.authenticate('facebook'));
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/secrets');
+  });
 
 app.get("/login", function(req, res){
   res.render("login");
@@ -101,6 +123,10 @@ app.get("/secrets", function(req, res){
 app.get("/logout", function(req, res) {
   req.logout();
   res.redirect("/");
+});
+
+app.get("/privacy", function(req, res){
+  res.render("privacy");
 });
 
 app.post("/register", function(req, res){
